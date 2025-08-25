@@ -7,10 +7,10 @@ const HEIGHT = canvas.height;
 // Constants
 const PIPE_WIDTH = 52;
 const PIPE_HEIGHT = 320;
-const GAP = 100;
-const BASE_HEIGHT = 112; 
+const GAP = 120;
+const BASE_HEIGHT = 112;
 const BASE_SPEED = 2;
-const PIPE_INTERVAL = 150;
+const PIPE_INTERVAL = 200;
 
 // Backgrounds
 const backgrounds = ["background-day.png", "background-night.png"];
@@ -67,8 +67,8 @@ const medalPlatinum = new Image(); medalPlatinum.src = "assets/sprites/medal_pla
 
 // Game variables
 let bird = { x:50, y:HEIGHT/2, width:34, height:24, frame:0, velocity:0, dead:false };
-let gravity = 0.25;
-let lift = -4.5;
+let gravity = 0.5;
+let lift = -8;
 let pipes = [];
 let frameCount = 0;
 let score = 0;
@@ -78,19 +78,27 @@ let birdAnimationFrame = 0;
 let gameStarted = false;
 let tilt = 0;
 const maxUpTilt = -25 * Math.PI/180;
-const maxDownTilt = 45 * Math.PI/180;
-let gameOverY = HEIGHT + 50; // start below screen
+const maxDownTilt = 90 * Math.PI/180;
+let gameOverY = HEIGHT + 50;
 let gameOverAlpha = 0;
 
-// NEW: Separate Y positions so Game Over is above, scoreboard lowered
-const gameOverTargetY = HEIGHT/2 - gameOverImg.height - 100; // Game Over image
-const scoreBoardTargetY = gameOverTargetY + gameOverImg.height + 60; // scoreboard below Game Over
+// Game Over & scoreboard positions
+const gameOverTargetY = HEIGHT/2 - gameOverImg.height - 100;
+const scoreBoardTargetY = gameOverTargetY + gameOverImg.height + 60;
 
 // Create pipe
 function createPipe() {
     const minPipeHeight = 50;
     const maxPipeHeight = HEIGHT - GAP - BASE_HEIGHT - 50;
-    const pipeHeight = Math.floor(Math.random() * (maxPipeHeight - minPipeHeight + 1)) + minPipeHeight;
+
+    let pipeHeight = Math.floor(Math.random() * (maxPipeHeight - minPipeHeight + 1)) + minPipeHeight;
+
+    if (pipes.length > 0) {
+        const lastY = pipes[pipes.length - 1].y;
+        const delta = Math.floor(Math.random() * 40) - 20;
+        pipeHeight = Math.min(Math.max(minPipeHeight, lastY + delta), maxPipeHeight);
+    }
+
     pipes.push({ x: WIDTH, y: pipeHeight, scored:false });
 }
 
@@ -136,7 +144,6 @@ function draw() {
     ctx.drawImage(base, baseX, HEIGHT - BASE_HEIGHT);
     ctx.drawImage(base, baseX + WIDTH, HEIGHT - BASE_HEIGHT);
 
-    // Score (only if game started)
     if (gameStarted) {
         const scoreStr = score.toString();
         const digitWidth = 24;
@@ -148,11 +155,14 @@ function draw() {
     }
 
     if (!gameStarted) {
-        ctx.drawImage(messageImg, WIDTH/2 - messageImg.width/2, HEIGHT/2 - messageImg.height/2 - 50);
+        const messageX = WIDTH/2 - messageImg.width/2;
+        const messageY = HEIGHT/2 - messageImg.height/2 - 40;
+        ctx.drawImage(messageImg, messageX, messageY);
+
         ctx.fillStyle = "white";
-        ctx.font = "20px sans-serif";
+        ctx.font = "16px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Tap or Space to Start", WIDTH / 2, HEIGHT / 2 + 50);
+        ctx.fillText("Tap or Space to Start", WIDTH / 2, messageY + messageImg.height + 20);
     }
 
     if (gameOver) drawGameOver();
@@ -160,94 +170,110 @@ function draw() {
 
 // Game Over animation & scoreboard
 function drawGameOver() {
-    gameOverY = gameOverTargetY; // Instant placement
+    if (gameOverY > gameOverTargetY) {
+        gameOverY -= 5;
+        if (gameOverY < gameOverTargetY) gameOverY = gameOverTargetY;
+    }
     ctx.drawImage(gameOverImg, WIDTH/2 - gameOverImg.width/2, gameOverY);
 
-    ctx.globalAlpha = gameOverAlpha; // Fade in scoreboard
-    if (gameOverAlpha < 1) gameOverAlpha += 0.05;
+    if (gameOverY <= gameOverTargetY) {
+        if (gameOverAlpha < 1) gameOverAlpha += 0.05;
 
-    // Scale down the scoreboard
-    const scale = 0.35;
-    const sbWidth = scoreBoardImg.width * scale;
-    const sbHeight = scoreBoardImg.height * scale;
-    ctx.drawImage(scoreBoardImg, WIDTH/2 - sbWidth/2, scoreBoardTargetY, sbWidth, sbHeight);
+        const scale = 0.4;
+        const sbWidth = scoreBoardImg.width * scale;
+        const sbHeight = scoreBoardImg.height * scale;
+        const sbX = WIDTH/2 - sbWidth/2;
+        ctx.globalAlpha = gameOverAlpha;
+        ctx.drawImage(scoreBoardImg, sbX, scoreBoardTargetY, sbWidth, sbHeight);
 
-    // Current score
-    const scoreStr = score.toString();
-    const digitWidth = 24 * scale;
-    let scoreX = WIDTH/2 - scoreStr.length * digitWidth / 2;
-    let scoreY = scoreBoardTargetY + 20 * scale;
-    for (let i = 0; i < scoreStr.length; i++) {
-        ctx.drawImage(numberImages[parseInt(scoreStr[i])], scoreX + i * digitWidth, scoreY, 24*scale, 24*scale);
+        // Current score
+        const scoreStr = score.toString();
+        const digitWidth = 24 * scale;
+        const digitHeight = 24 * scale;
+        const scoreY = scoreBoardTargetY + 18;
+        let scoreX = sbX + 70;
+        for (let i = 0; i < scoreStr.length; i++) {
+            ctx.drawImage(numberImages[parseInt(scoreStr[i])], scoreX + i * digitWidth, scoreY, digitWidth, digitHeight);
+        }
+
+        // Best score
+        let bestScore = Math.max(score, localStorage.getItem("bestScore") || 0);
+        localStorage.setItem("bestScore", bestScore);
+        const bestStr = bestScore.toString();
+        const bestY = scoreY + 26;
+        let bestX = sbX + 70;
+        for (let i = 0; i < bestStr.length; i++) {
+            ctx.drawImage(numberImages[parseInt(bestStr[i])], bestX + i * digitWidth, bestY, digitWidth, digitHeight);
+        }
+
+        // Medal
+        let medal = null;
+        if (score >= 10 && score < 20) medal = medalBronze;
+        else if (score >= 20 && score < 30) medal = medalSilver;
+        else if (score >= 30 && score < 50) medal = medalGold;
+        else if (score >= 50) medal = medalPlatinum;
+
+        if (medal) {
+            const medalScale = 0.22;
+            const medalX = sbX + 20;
+            const medalY = scoreBoardTargetY + 12;
+            ctx.drawImage(medal, medalX, medalY, medal.width * medalScale, medal.height * medalScale);
+        }
+
+        ctx.globalAlpha = 1;
     }
-
-    // Best score
-    let bestScore = localStorage.getItem("bestScore") || 0;
-    if (score > bestScore) bestScore = score;
-    localStorage.setItem("bestScore", bestScore);
-    let bestStr = bestScore.toString();
-    let bestX = WIDTH/2 - bestStr.length * digitWidth / 2;
-    let bestY = scoreY + 30 * scale;
-    for (let i = 0; i < bestStr.length; i++) {
-        ctx.drawImage(numberImages[parseInt(bestStr[i])], bestX + i * digitWidth, bestY, 24*scale, 24*scale);
-    }
-
-    // Medal
-    let medal = null;
-    if (score >= 10 && score < 20) medal = medalBronze;
-    else if (score >= 20 && score < 30) medal = medalSilver;
-    else if (score >= 30 && score < 50) medal = medalGold;
-    else if (score >= 50) medal = medalPlatinum;
-
-    if (medal) {
-        const medalScale = 0.3;
-        ctx.drawImage(
-            medal,
-            WIDTH/2 - (medal.width * medalScale) - 50,
-            scoreBoardTargetY + 10,
-            medal.width * medalScale,
-            medal.height * medalScale
-        );
-    }
-
-    ctx.globalAlpha = 1; // Reset alpha
 }
 
 // Update game
 function update() {
     birdAnimationFrame++;
-    bird.frame = Math.floor(birdAnimationFrame / 5) % birdFrames.length;
 
     if (!gameStarted) {
-        bird.y = HEIGHT/2 + Math.sin(birdAnimationFrame / 10) * 5;
+        bird.y = HEIGHT/2 - 20 + Math.sin(birdAnimationFrame / 8) * 8;
+        bird.frame = Math.floor(birdAnimationFrame / 5) % birdFrames.length;
         tilt = 0;
         return;
     }
 
-    if (!bird.dead) bird.velocity += gravity;
-    bird.y += bird.velocity;
+    bird.frame = Math.floor(birdAnimationFrame / 3) % birdFrames.length;
 
     if (!bird.dead) {
+        bird.velocity += gravity;
+        bird.y += bird.velocity;
         const targetTilt = bird.velocity < 0 ? maxUpTilt : Math.min(maxDownTilt, bird.velocity / 10);
-        tilt = tilt + (targetTilt - tilt) * 0.1; // Smooth transition
-    } else tilt = maxDownTilt;
+        tilt = tilt + (targetTilt - tilt) * 0.1;
+    } else {
+        bird.velocity += gravity;
+        bird.y += bird.velocity;
+        tilt += 0.1;
+        if (tilt > maxDownTilt) tilt = maxDownTilt;
+    }
 
     if (pipes.length === 0 || WIDTH - pipes[pipes.length - 1].x >= PIPE_INTERVAL) createPipe();
 
     pipes.forEach(pipe => {
         if (!bird.dead) pipe.x -= BASE_SPEED;
+
         if (!bird.dead && checkCollision(pipe)) {
             bird.dead = true;
-            if (!deathSoundPlayed) { 
-                audioHit.play(); 
-                setTimeout(() => audioDie.play(), 200); 
-                deathSoundPlayed = true; 
+            if (!deathSoundPlayed) {
+                audioHit.currentTime = 0;
+                audioHit.play();
+                setTimeout(() => {
+                    audioDie.currentTime = 0;
+                    audioDie.play();
+                }, 200);
+                deathSoundPlayed = true;
             }
             bird.velocity = 5;
-            gameOver = true;
+            setTimeout(() => gameOver = true, 300);
         }
+
         if (!pipe.scored && pipe.x + PIPE_WIDTH < bird.x) {
-            score++; pipe.scored = true; audioPoint.play();
+            score++;
+            pipe.scored = true;
+            audioPoint.currentTime = 0;
+            audioPoint.play();
         }
     });
 
@@ -255,15 +281,9 @@ function update() {
 
     if (bird.y + bird.height >= HEIGHT - BASE_HEIGHT) {
         bird.y = HEIGHT - BASE_HEIGHT - bird.height;
-        if (!bird.dead) {
-            bird.dead = true;
-            if (!deathSoundPlayed) { 
-                audioHit.play(); 
-                setTimeout(() => audioDie.play(), 200); 
-                deathSoundPlayed = true; 
-            }
-            bird.velocity = 0; gameOver = true;
-        }
+        bird.velocity = 0;
+        tilt = maxDownTilt;
+        if (!gameOver) gameOver = true;
     }
 
     frameCount++;
@@ -272,8 +292,11 @@ function update() {
 // Flap bird
 function flap() {
     if (!gameStarted) { gameStarted = true; return; }
-    if (!gameOver) { bird.velocity = lift; audioWing.play(); }
-    else resetGame();
+    if (!gameOver) {
+        bird.velocity = lift;
+        audioWing.currentTime = 0;
+        audioWing.play();
+    } else resetGame();
 }
 
 document.addEventListener("keydown", e => { if (e.code === "Space") flap(); });
@@ -296,7 +319,7 @@ function resetGame() {
     bird = { x:50, y:HEIGHT/2, width:34, height:24, frame:0, velocity:0, dead:false };
     pipes = []; score = 0; frameCount = 0; gameOver = false; baseX = 0; deathSoundPlayed = false;
     birdAnimationFrame = 0; tilt = 0; gameStarted = false; gameOverY = HEIGHT + 50; gameOverAlpha = 0;
-    audioSwoosh.play();
+    audioSwoosh.currentTime = 0; audioSwoosh.play();
 }
 
 // Game loop
