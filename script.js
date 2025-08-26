@@ -7,7 +7,7 @@ const HEIGHT = canvas.height;
 // Constants
 const PIPE_WIDTH = 52;
 const PIPE_HEIGHT = 320;
-const GAP = 120;
+const GAP = 60;
 const BASE_HEIGHT = 112;
 const BASE_SPEED = 2;
 const PIPE_INTERVAL = 200;
@@ -144,13 +144,18 @@ function draw() {
     ctx.drawImage(base, baseX, HEIGHT - BASE_HEIGHT);
     ctx.drawImage(base, baseX + WIDTH, HEIGHT - BASE_HEIGHT);
 
-    if (gameStarted) {
+    // Live score (top center, original size)
+    if (gameStarted && !gameOver) {
         const scoreStr = score.toString();
-        const digitWidth = 24;
-        const totalWidth = scoreStr.length * digitWidth;
-        let startX = WIDTH/2 - totalWidth/2;
+        const digitWidth = 23;
+        const digitHeight = 40;
+        const scoreXBase = WIDTH / 2;
+        const scoreY = 20;
+        const totalWidth = digitWidth * scoreStr.length;
+        const startX = scoreXBase - totalWidth / 2;
+
         for (let i = 0; i < scoreStr.length; i++) {
-            ctx.drawImage(numberImages[parseInt(scoreStr[i])], startX + i * digitWidth, 20);
+            ctx.drawImage(numberImages[parseInt(scoreStr[i])], startX + i * digitWidth, scoreY, digitWidth, digitHeight);
         }
     }
 
@@ -179,44 +184,46 @@ function drawGameOver() {
     if (gameOverY <= gameOverTargetY) {
         if (gameOverAlpha < 1) gameOverAlpha += 0.05;
 
-        const scale = 0.4;
-        const sbWidth = scoreBoardImg.width * scale;
-        const sbHeight = scoreBoardImg.height * scale;
+        const sbScale = 0.35; // smaller scoreboard
+        const sbWidth = scoreBoardImg.width * sbScale;
+        const sbHeight = scoreBoardImg.height * sbScale;
         const sbX = WIDTH/2 - sbWidth/2;
         ctx.globalAlpha = gameOverAlpha;
         ctx.drawImage(scoreBoardImg, sbX, scoreBoardTargetY, sbWidth, sbHeight);
 
         // Current score
+        const digitScale = 0.35;
+        const digitWidth = 30 * digitScale;
+        const digitHeight = 48 * digitScale;
         const scoreStr = score.toString();
-        const digitWidth = 24 * scale;
-        const digitHeight = 24 * scale;
-        const scoreY = scoreBoardTargetY + 18;
-        let scoreX = sbX + 70;
+        const scoreY = scoreBoardTargetY + 40;
+        const scoreXBase = sbX + 195;
+        let scoreX = scoreXBase - (digitWidth * (scoreStr.length - 1)) / 2;
         for (let i = 0; i < scoreStr.length; i++) {
             ctx.drawImage(numberImages[parseInt(scoreStr[i])], scoreX + i * digitWidth, scoreY, digitWidth, digitHeight);
         }
 
         // Best score
-        let bestScore = Math.max(score, localStorage.getItem("bestScore") || 0);
-        localStorage.setItem("bestScore", bestScore);
+        const bestScore = Math.max(score, localStorage.getItem("bestScore") || 0);
         const bestStr = bestScore.toString();
-        const bestY = scoreY + 26;
-        let bestX = sbX + 70;
+        const bestY = scoreY + 43;
+        const bestXBase = sbX + 195;
+        let bestX = bestXBase - (digitWidth * (bestStr.length - 1)) / 2;
         for (let i = 0; i < bestStr.length; i++) {
             ctx.drawImage(numberImages[parseInt(bestStr[i])], bestX + i * digitWidth, bestY, digitWidth, digitHeight);
         }
 
         // Medal
         let medal = null;
-        if (score >= 10 && score < 20) medal = medalBronze;
-        else if (score >= 20 && score < 30) medal = medalSilver;
-        else if (score >= 30 && score < 50) medal = medalGold;
-        else if (score >= 50) medal = medalPlatinum;
+        if (score >= 1 && score < 40) medal = medalBronze;
+        else if (score >= 41 && score < 100) medal = medalSilver;
+        else if (score >= 101 && score < 500) medal = medalGold;
+        else if (score >= 501) medal = medalPlatinum;
 
         if (medal) {
-            const medalScale = 0.22;
-            const medalX = sbX + 20;
-            const medalY = scoreBoardTargetY + 12;
+            const medalScale = 0.1;
+            const medalX = sbX + 30;
+            const medalY = scoreBoardTargetY + 45;
             ctx.drawImage(medal, medalX, medalY, medal.width * medalScale, medal.height * medalScale);
         }
 
@@ -279,6 +286,7 @@ function update() {
 
     pipes = pipes.filter(pipe => pipe.x + PIPE_WIDTH > 0);
 
+    // Ground collision
     if (bird.y + bird.height >= HEIGHT - BASE_HEIGHT) {
         bird.y = HEIGHT - BASE_HEIGHT - bird.height;
         bird.velocity = 0;
